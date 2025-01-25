@@ -1,93 +1,130 @@
+
 const express = require('express');
 let books = require("./booksdb.js");
+const e = require('express');
 let isValid = require("./auth_users.js").isValid;
 let users = require("./auth_users.js").users;
 const public_users = express.Router();
 
 
-public_users.post("/register", (req, res) => {
-  const { username, password } = req.body;
+public_users.post("/register", (req,res) => {
+    
+    if(!req.body.username)
+        return res.send("Username is mandatory!")
 
-  if (!username || !password) {
-    return res.status(400).json({ message: 'Username and password are required' });
-  }
+    if(!req.body.password)
+        return res.send("Password is mandatory!")
 
-  if (isValid(username)) {
-    return res.status(400).json({ message: 'Username already exists' });
-  }
+    let existingUser = users.filter(user => user.username === req.body.username);
 
-  users.push({ username, password });
-  console.log(users); // Verifica che l'utente sia stato aggiunto
-  res.status(201).json({ message: 'User registered successfully' });
+    if(existingUser && existingUser.username)
+        return res.send("ERROR! The user" + (' ')+ (req.body.username) + " already exist!")
+
+    users.push({"username":req.body.username,"password":req.body.password});
+    res.send("The user" + (' ')+ (req.body.username) + " Has been added!")
 });
 
 
+const getAllBooks = new Promise( (resolve, reject) => {
+    try{
+        const data = books;
+        resolve(data)
+    }catch(err){
+        reject(err)
+    }
+})
 
 // Get the book list available in the shop
-public_users.get('/', function (req, res) {
-  const formattedBooks = JSON.stringify(books, null, 2);
-  res.send(formattedBooks);
-});
+public_users.get('/',function (req, res) {
+    //res.send(JSON.stringify({books},null,4));
+    getAllBooks
+        .then(
+            (data) => res.send(JSON.stringify({data},null,4)),
+            (err) => res.send("Error loading the books")
+        )
+});  
 
+const getDetails = async (url) => {
+    const req = await axios.get(url)
+    req.then(resp => {
+        return resp.data;
+    })
+    .catch(err => {
+        return null;
+    })
+}
 
 // Get book details based on ISBN
-public_users.get('/isbn/:isbn', function (req, res) {
-    const bookId = req.params.isbn;
+public_users.get('/isbn/:isbn',function (req, res) {
+    const isbn = req.params.isbn; 
+    //filter books by isbn
+    //one or zero book should be found   
+    //res.send(JSON.stringify(books[isbn],null,4));
+    getDetails('http://invalid-url/isbn/' + isbn)
+    .then(resp => {
+        res.send(JSON.stringify(resp.data,null,4));
+    })
+    .catch(err => {
+        return res.status(300).json({message: "Error retrieving book details"});
+    })
+ });
   
-    const book = books[bookId];
-  
-    if (book) {
-      res.json(book);
-    } else {
-      res.status(404).json({ message: 'Book not found' });
-    }
-  });
-  
-
-  
+const getBooksByAuthor = (author) => {
+    return new Promise( (resolve, reject) => {
+        try{
+            let books_filtered = Object.values(books).filter(book => book.author.toLowerCase().includes(author));
+            resolve(books_filtered)
+        }catch(err){
+            reject(err)
+        }
+    })
+}
 // Get book details based on author
-public_users.get('/author/:author', function (req, res) {
-    const author = req.params.author;
-    const result = [];
-    Object.keys(books).forEach(key => {
-      if (books[key].author.toLowerCase() === author.toLowerCase()) {
-        result.push(books[key]);
-      }
-    });
-    if (result.length > 0) {
-      res.json(result);
-    } else {
-      res.status(404).json({ message: 'Books by this author not found' });
-    }
-  });
-  
+public_users.get('/author/:author',function (req, res) {
+    const author = req.params.author ? req.params.author.toLowerCase() : '';   ; 
+    //filter books by author
+    //more than one book could be found 
 
+    //Obtain all the keys for the ‘books’ object and Iterate through the ‘books’ array & check the author
+    //Better if we Iterate through values
+    //let filtered_books = Object.values(books).filter(book => book.author.includes(author))
+    //res.send(JSON.stringify(filtered_books,null,4));
+    getBooksByAuthor(author)
+    .then(
+        (data) => res.send(JSON.stringify(data,null,4)),
+        (err) => res.status(300).json({message: "Error retrieving book details"})
+    )
+});
+
+const getBooksByTitle = (title) => {
+    return new Promise( (resolve, reject) => {
+        try{
+            let books_filtered = Object.values(books).filter(book => book.title.toLowerCase().includes(title));
+            resolve(books_filtered)
+        }catch(err){
+            reject(err)
+        }
+    })
+}
 // Get all books based on title
 public_users.get('/title/:title',function (req, res) {
-    const title = req.params.title;
-    const result = [];
-    Object.keys(books).forEach(key => {
-      if (books[key].title.toLowerCase() === title.toLowerCase()) {
-        result.push(books[key]);
-      }
-    });
-    if (result.length > 0) {
-      res.json(result);
-    } else {
-      res.status(404).json({ message: 'Books by this title not found' });
-    }
+    const title = req.params.title ? req.params.title.toLowerCase() : '';   
+    //filter books by author
+    //more than one book could be found 
+    //let filtered_books = Object.values(books).filter(book => book.title.toLowerCase().includes(title))
+    //res.send(JSON.stringify(filtered_books,null,4));
+    getBooksByTitle(title)
+    .then(
+        (data) => res.send(JSON.stringify(data,null,4)),
+        (err) => res.status(300).json({message: "Error retrieving book details"})
+    )
 });
 
 //  Get book review
-public_users.get('/review/:isbn', function (req, res) {
-  const bookId = req.params.isbn;
-  const book = books[bookId];
-  if (book && Object.keys(book.reviews).length > 0) {
-    res.json(book.reviews);
-  } else {
-    res.status(404).json({ message: 'Reviews not found' });
-  }
-});
-  
+//  Task 5 - Get book review
+public_users.get('/review/:isbn',function (req, res) {
+    const isbn = req.params.isbn;
+    res.send(books[isbn]["reviews"])
+  });
 
 module.exports.general = public_users;
